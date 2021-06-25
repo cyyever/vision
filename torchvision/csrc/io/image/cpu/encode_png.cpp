@@ -87,7 +87,7 @@ torch::Tensor encode_png(const torch::Tensor& data, int64_t compression_level) {
     }
   };
   std::unique_ptr<png_struct, decltype(deleter)> resource_RAII(
-      png_ptr, deleter);
+      png_write, deleter);
 
   /* Establish the setjmp return context for my_error_exit to use. */
   if (setjmp(err_ptr.setjmp_buffer)) {
@@ -166,14 +166,14 @@ torch::Tensor encode_png(const torch::Tensor& data, int64_t compression_level) {
   // Write EOF
   png_write_end(png_write, info_ptr);
 
-  torch::TensorOptions options = torch::TensorOptions{torch::kU8};
-  auto out_tensor = torch::empty({(long)buf_info.size}, options);
+  // Shrink buffer
+  if (buf_info.buffer_size > buf_info.size) {
+    buf_info.buffer = (unsigned char*)realloc(buf_info.buffer, buf_info.size);
+  }
 
-  // Copy memory from png buffer, since torch cannot get ownership of it via
-  // `from_blob`
-  auto out_ptr = out_tensor.data_ptr<uint8_t>();
-  std::memcpy(out_ptr, buf_info.buffer, sizeof(uint8_t) * out_tensor.numel());
-  return out_tensor;
+  torch::TensorOptions options = torch::TensorOptions{torch::kU8};
+  return torch::from_blob(
+      buf_info.buffer, {(long)buf_info.size}, ::free, options);
 }
 
 #endif
