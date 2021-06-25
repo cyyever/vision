@@ -12,10 +12,26 @@ if(WITH_CUDA)
   set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-relaxed-constexpr")
 endif()
 
-find_package(Python3 COMPONENTS Development)
+find_package(Python3 COMPONENTS Interpreter Development)
+
+if(Python3_FOUND)
+  execute_process(
+    COMMAND ${Python3_EXECUTABLE} -c "import torch ; print(torch.__path__[0])"
+    RESULT_VARIABLE _exitcode
+    OUTPUT_VARIABLE _path)
+  if(NOT ${_exitcode} EQUAL 0)
+    message(FATAL_ERROR "failed to found pytorch path")
+  endif()
+  string(STRIP ${_path} _path)
+  set(pytorch_path
+      ${_path}
+      CACHE STRING "pytorch path" FORCE)
+  list(PREPEND CMAKE_PREFIX_PATH ${pytorch_path}/share/cmake)
+endif()
 
 find_package(Torch REQUIRED)
-find_package(PNG REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_search_module(libpng REQUIRED IMPORTED_TARGET libpng)
 find_package(JPEG REQUIRED)
 
 function(CUDA_CONVERT_FLAGS EXISTING_TARGET)
@@ -71,12 +87,13 @@ FOREACH(DIR ${ALLOW_LISTED})
 ENDFOREACH()
 
 add_library(${PROJECT_NAME} SHARED ${ALL_SOURCES})
-target_link_libraries(${PROJECT_NAME} PRIVATE ${TORCH_LIBRARIES} ${PNG_LIBRARY} ${JPEG_LIBRARIES} Python3::Python)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${TORCH_LIBRARIES} PkgConfig::libpng ${JPEG_LIBRARIES} Python3::Python)
 set_target_properties(${PROJECT_NAME} PROPERTIES
   EXPORT_NAME TorchVision
   INSTALL_RPATH ${TORCH_INSTALL_PREFIX}/lib)
 
-include_directories(torchvision/csrc ${JPEG_INCLUDE_DIRS} ${PNG_INCLUDE_DIRS})
+target_compile_definitions(${PROJECT_NAME} PUBLIC PNG_FOUND)
+include_directories(torchvision/csrc ${JPEG_INCLUDE_DIRS})
 
 set(TORCHVISION_CMAKECONFIG_INSTALL_DIR "share/cmake/TorchVision" CACHE STRING "install path for TorchVisionConfig.cmake")
 
