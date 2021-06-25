@@ -4,6 +4,7 @@ from PIL import Image
 
 import os
 import os.path
+import pickle
 from typing import Any, Callable, cast, Dict, List, Optional, Tuple
 
 
@@ -76,6 +77,10 @@ def make_dataset(
             return has_file_allowed_extension(x, cast(Tuple[str, ...], extensions))
 
     is_valid_file = cast(Callable[[str], bool], is_valid_file)
+    cache_file = os.path.join(directory, ".instances")
+    if os.path.isfile(cache_file):
+        with open(cache_file, "rb") as f:
+            return pickle.load(f)
 
     instances = []
     available_classes = set()
@@ -101,6 +106,8 @@ def make_dataset(
             msg += f"Supported extensions are: {', '.join(extensions)}"
         raise FileNotFoundError(msg)
 
+    with open(cache_file, "wb") as f:
+        pickle.dump(instances, f)
     return instances
 
 
